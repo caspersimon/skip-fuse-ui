@@ -176,3 +176,32 @@ public struct ConditionalContentTestFixture: View {
         }
     }
 }
+
+/// Sample: an onboarding-style Continue button whose enabled state and target action count
+/// are owned by native `@State`, plus a separate control that remains enabled throughout.
+public struct DisabledContinueButtonTestFixture: View {
+    @State var isContinueEnabled = false
+    @State var continueActionCount = 0
+
+    public init() {
+    }
+
+    public var body: some View {
+        VStack {
+            Button("Continue") {
+                continueActionCount += 1
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!isContinueEnabled)
+            .accessibilityIdentifier("onboarding-continue")
+
+            Button("Toggle Continue enabled") {
+                isContinueEnabled.toggle()
+            }
+            .accessibilityIdentifier("continue-enabled-toggle")
+
+            Text("continue actions: \(continueActionCount)")
+                .accessibilityIdentifier("continue-action-count")
+        }
+    }
+}

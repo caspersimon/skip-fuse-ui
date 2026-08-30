@@ -7,14 +7,27 @@ import SkipAndroidBridge
 import SkipSwiftUISamples
 
 #if SKIP
+import SkipUI
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 #endif
@@ -117,6 +130,92 @@ final class FuseComposeUITests: XCTestCase {
         composeRule.onNodeWithTag("toggle-button").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("conditional-label").assertDoesNotExist()
+        #endif
+    }
+
+    /// Direct and bridged-label SkipUI buttons establish the owner/label boundary beside the
+    /// native Fuse-bridged `@State`-backed Continue button. The Fuse button must retain one
+    /// stable semantics owner while its `Disabled` property changes across recompositions.
+    /// Compose keeps click semantics on disabled buttons, so enabledness is asserted directly
+    /// rather than inferred from the presence or absence of `OnClick`.
+    func testDisabledContinueButtonRetainsSemanticsOwnerAcrossTransitions() throws {
+        #if !SKIP
+        throw XCTSkip("Compose UI testing is Android-only")
+        #else
+        try requireBridgedMainActor()
+        composeRule.setContent {
+            LocalInputModeManager.current.requestInputMode(InputMode.Keyboard)
+            // Layout only: each SkipUI button renders one Material button and owns its label.
+            androidx.compose.foundation.layout.Column {
+                SkipUI.Button(action: {}) {
+                    SkipUI.Text(keyPattern: "Continue", keyValues: nil, tableName: nil, localeIdentifier: nil, bridgedBundle: nil)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(true)
+                .accessibilityIdentifier("direct-skipui-continue")
+                .Compose()
+
+                SkipUI.Button(
+                    bridgedRole: nil,
+                    action: {},
+                    bridgedLabel: SkipUI.Text(keyPattern: "Continue", keyValues: nil, tableName: nil, localeIdentifier: nil, bridgedBundle: nil)
+                )
+                .buttonStyle(.borderedProminent)
+                .disabled(true)
+                .accessibilityIdentifier("bridged-skipui-continue")
+                .Compose()
+
+                DisabledContinueButtonTestFixture().Compose()
+            }
+        }
+
+        func assertContinueOwner(tag: String, isEnabled: Bool) {
+            composeRule.onAllNodesWithTag(tag).assertCountEquals(1)
+            composeRule.onAllNodesWithTag(tag, useUnmergedTree: true).assertCountEquals(1)
+            composeRule.onNodeWithTag(tag).assertTextEquals("Continue")
+            composeRule.onNodeWithTag(tag, useUnmergedTree: true)
+                .assert(hasAnyDescendant(hasTextExactly("Continue")))
+            if isEnabled {
+                composeRule.onNodeWithTag(tag).assertIsEnabled()
+                composeRule.onNodeWithTag(tag, useUnmergedTree: true).assertIsEnabled()
+            } else {
+                composeRule.onNodeWithTag(tag).assertIsNotEnabled()
+                composeRule.onNodeWithTag(tag, useUnmergedTree: true).assertIsNotEnabled()
+            }
+        }
+
+        func assertContinueSemantics(isEnabled: Bool) {
+            composeRule.waitForIdle()
+            assertContinueOwner(tag: "onboarding-continue", isEnabled: isEnabled)
+            if isEnabled {
+                composeRule.onNodeWithTag("onboarding-continue").requestFocus()
+                composeRule.onNodeWithTag("onboarding-continue").assertIsFocused()
+            }
+        }
+
+        // disabled
+        composeRule.waitForIdle()
+        assertContinueOwner(tag: "direct-skipui-continue", isEnabled: false)
+        assertContinueOwner(tag: "bridged-skipui-continue", isEnabled: false)
+        assertContinueSemantics(isEnabled: false)
+        composeRule.onNodeWithTag("continue-action-count").assertTextEquals("continue actions: 0")
+
+        // enabled
+        composeRule.onNodeWithTag("continue-enabled-toggle").performClick()
+        assertContinueSemantics(isEnabled: true)
+        composeRule.onNodeWithTag("continue-action-count").assertTextEquals("continue actions: 0")
+
+        // disabled again
+        composeRule.onNodeWithTag("continue-enabled-toggle").performClick()
+        assertContinueSemantics(isEnabled: false)
+        composeRule.onNodeWithTag("continue-action-count").assertTextEquals("continue actions: 0")
+
+        // enabled again; invoke the intended target exactly once overall.
+        composeRule.onNodeWithTag("continue-enabled-toggle").performClick()
+        assertContinueSemantics(isEnabled: true)
+        composeRule.onNodeWithTag("onboarding-continue").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("continue-action-count").assertTextEquals("continue actions: 1")
         #endif
     }
 
