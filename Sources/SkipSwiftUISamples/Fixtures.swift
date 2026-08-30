@@ -205,3 +205,35 @@ public struct DisabledContinueButtonTestFixture: View {
         }
     }
 }
+
+/// Sample: two named accessibility actions and changing polite live-region content attached
+/// to one native owner, with separate counters that identify which handler was invoked.
+public struct AccessibilityFacadeTestFixture: View {
+    @State var moveUpActionCount = 0
+    @State var archiveActionCount = 0
+    @State var status = "Ready"
+
+    public init() {
+    }
+
+    public var body: some View {
+        VStack {
+            Text(status)
+                .accessibilityIdentifier("accessibility-facade-owner")
+                .accessibilityAction(named: Text("Move Up")) {
+                    moveUpActionCount += 1
+                    status = "Moved up"
+                }
+                .accessibilityAction(named: "Archive") {
+                    archiveActionCount += 1
+                    status = "Archived"
+                }
+                .accessibilityLiveRegion(.polite)
+
+            Text("move up actions: \(moveUpActionCount)")
+                .accessibilityIdentifier("move-up-action-count")
+            Text("archive actions: \(archiveActionCount)")
+                .accessibilityIdentifier("archive-action-count")
+        }
+    }
+}

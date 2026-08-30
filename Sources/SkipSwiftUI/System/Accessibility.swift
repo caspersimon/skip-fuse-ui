@@ -501,14 +501,27 @@ extension View {
 }
 
 extension View {
+    nonisolated public func accessibilityLiveRegion(_ region: AccessibilityLiveRegion) -> some View {
+        return ModifierView(target: self) {
+            $0.Java_viewOrEmpty.accessibilityLiveRegion(bridgedMode: region == .assertive ? 1 : 0)
+        }
+    }
+}
+
+extension View {
     @available(*, unavailable)
     nonisolated public func accessibilityAction(_ actionKind: AccessibilityActionKind = .default, _ handler: @escaping () -> Void) -> some View /* ModifiedContent<Self, AccessibilityAttachmentModifier> */ {
         stubView()
     }
 
-    @available(*, unavailable)
     nonisolated public func accessibilityAction(named name: Text, _ handler: @escaping () -> Void) -> some View /* ModifiedContent<Self, AccessibilityAttachmentModifier> */ {
-        stubView()
+        return ModifierView(target: self) {
+            let bridgedName = name.spec.verbatim
+                ?? name.spec.key?.interpolation.pattern
+                ?? name.spec.resource?.defaultValue.pattern
+                ?? ""
+            return $0.Java_viewOrEmpty.bridgedAccessibilityAction(named: bridgedName, handler)
+        }
     }
 }
 
@@ -527,19 +540,16 @@ extension View {
 }
 
 extension View {
-    @available(*, unavailable)
     nonisolated public func accessibilityAction(named nameKey: LocalizedStringKey, _ handler: @escaping () -> Void) -> some View /* ModifiedContent<Self, AccessibilityAttachmentModifier> */ {
-        stubView()
+        return accessibilityAction(named: Text(nameKey), handler)
     }
 
-    @available(*, unavailable)
     @_disfavoredOverload nonisolated public func accessibilityAction(named nameResource: AndroidLocalizedStringResource, _ handler: @escaping () -> Void) -> some View /* ModifiedContent<Self, AccessibilityAttachmentModifier> */ {
-        stubView()
+        return accessibilityAction(named: Text(nameResource), handler)
     }
 
-    @available(*, unavailable)
     @_disfavoredOverload nonisolated public func accessibilityAction<S>(named name: S, _ handler: @escaping () -> Void) -> some View /* ModifiedContent<Self, AccessibilityAttachmentModifier> */ where S : StringProtocol {
-        stubView()
+        return accessibilityAction(named: Text(name), handler)
     }
 }
 
@@ -573,6 +583,11 @@ public struct AccessibilityActionKind : Equatable, Sendable {
 
     public init(named name: Text) {
     }
+}
+
+public enum AccessibilityLiveRegion : Equatable, Sendable {
+    case polite
+    case assertive
 }
 
 public enum AccessibilityAdjustmentDirection : Hashable, Sendable {

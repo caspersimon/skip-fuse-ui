@@ -11,6 +11,10 @@ import SkipUI
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
@@ -216,6 +220,91 @@ final class FuseComposeUITests: XCTestCase {
         composeRule.onNodeWithTag("onboarding-continue").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("continue-action-count").assertTextEquals("continue actions: 1")
+        #endif
+    }
+
+    /// Individual named-action and live-region facade modifiers must reach the same real
+    /// owner. Each exact action label invokes only its own native handler, no unavailable
+    /// action leaks into the semantics list, and status recomposition preserves that owner.
+    func testAccessibilityFacadeNamedActionsAndLiveRegionShareOwner() throws {
+        #if !SKIP
+        throw XCTSkip("Compose UI testing is Android-only")
+        #else
+        try requireBridgedMainActor()
+        composeRule.setContent {
+            AccessibilityFacadeTestFixture().Compose()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onAllNodesWithTag("accessibility-facade-owner").assertCountEquals(1)
+        composeRule.onAllNodesWithTag(
+            "accessibility-facade-owner",
+            useUnmergedTree: true
+        ).assertCountEquals(1)
+
+        let initialNode = composeRule.onNodeWithTag("accessibility-facade-owner")
+            .fetchSemanticsNode()
+        let initialUnmergedNode = composeRule.onNodeWithTag(
+            "accessibility-facade-owner",
+            useUnmergedTree: true
+        ).fetchSemanticsNode()
+        XCTAssertEqual(initialNode.id, initialUnmergedNode.id)
+        XCTAssertEqual(
+            initialNode.config.getOrNull(SemanticsProperties.LiveRegion),
+            LiveRegionMode.Polite
+        )
+        XCTAssertEqual(
+            initialUnmergedNode.config.getOrNull(SemanticsProperties.LiveRegion),
+            LiveRegionMode.Polite
+        )
+
+        let initialActions = initialNode.config.getOrNull(SemanticsActions.CustomActions)
+        XCTAssertEqual(initialActions?.size, 2)
+        XCTAssertNotNil(initialActions?.firstOrNull { $0.label == "Move Up" })
+        XCTAssertNotNil(initialActions?.firstOrNull { $0.label == "Archive" })
+        XCTAssertNil(initialActions?.firstOrNull { $0.label == "Move Down" })
+        XCTAssertEqual(
+            initialUnmergedNode.config.getOrNull(SemanticsActions.CustomActions)?
+                .map { $0.label },
+            initialActions?.map { $0.label }
+        )
+        composeRule.onNodeWithTag("accessibility-facade-owner").assertTextEquals("Ready")
+        composeRule.onNodeWithTag("move-up-action-count").assertTextEquals("move up actions: 0")
+        composeRule.onNodeWithTag("archive-action-count").assertTextEquals("archive actions: 0")
+
+        XCTAssertEqual(
+            initialActions?.firstOrNull { $0.label == "Move Up" }?.action(),
+            true
+        )
+        composeRule.waitForIdle()
+        let movedNode = composeRule.onNodeWithTag("accessibility-facade-owner")
+            .fetchSemanticsNode()
+        XCTAssertEqual(movedNode.id, initialNode.id)
+        XCTAssertEqual(
+            movedNode.config.getOrNull(SemanticsProperties.LiveRegion),
+            LiveRegionMode.Polite
+        )
+        composeRule.onNodeWithTag("accessibility-facade-owner").assertTextEquals("Moved up")
+        composeRule.onNodeWithTag("move-up-action-count").assertTextEquals("move up actions: 1")
+        composeRule.onNodeWithTag("archive-action-count").assertTextEquals("archive actions: 0")
+
+        let movedActions = movedNode.config.getOrNull(SemanticsActions.CustomActions)
+        XCTAssertEqual(
+            movedActions?.firstOrNull { $0.label == "Archive" }?.action(),
+            true
+        )
+        composeRule.waitForIdle()
+        let archivedNode = composeRule.onNodeWithTag("accessibility-facade-owner")
+            .fetchSemanticsNode()
+        XCTAssertEqual(archivedNode.id, initialNode.id)
+        XCTAssertEqual(
+            archivedNode.config.getOrNull(SemanticsProperties.LiveRegion),
+            LiveRegionMode.Polite
+        )
+        XCTAssertEqual(archivedNode.config.getOrNull(SemanticsActions.CustomActions)?.size, 2)
+        composeRule.onNodeWithTag("accessibility-facade-owner").assertTextEquals("Archived")
+        composeRule.onNodeWithTag("move-up-action-count").assertTextEquals("move up actions: 1")
+        composeRule.onNodeWithTag("archive-action-count").assertTextEquals("archive actions: 1")
         #endif
     }
 
