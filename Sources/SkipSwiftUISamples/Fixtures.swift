@@ -237,3 +237,43 @@ public struct AccessibilityFacadeTestFixture: View {
         }
     }
 }
+
+/// Sample: the dynamic accessibility-actions builder projected through the compiled-Swift
+/// facade, including changing action membership, labels, and distinct native callbacks.
+public struct AccessibilityActionsBuilderFixture: View {
+    @State var includesArchive = false
+    @State var moveDirectionIsDown = false
+    @State var moveActionCount = 0
+    @State var archiveActionCount = 0
+
+    public init() {
+    }
+
+    public var body: some View {
+        VStack {
+            Text("Builder owner")
+                .accessibilityIdentifier("accessibility-actions-builder-owner")
+                .accessibilityActions {
+                    Button(moveDirectionIsDown ? "Move Down" : "Move Up") {
+                        moveActionCount += 1
+                        moveDirectionIsDown.toggle()
+                    }
+                    if includesArchive {
+                        Button("Archive") {
+                            archiveActionCount += 1
+                        }
+                    }
+                }
+
+            Button("Toggle Archive Action") {
+                includesArchive.toggle()
+            }
+            .accessibilityIdentifier("accessibility-actions-builder-toggle")
+
+            Text("builder move actions: \(moveActionCount)")
+                .accessibilityIdentifier("builder-move-action-count")
+            Text("builder archive actions: \(archiveActionCount)")
+                .accessibilityIdentifier("builder-archive-action-count")
+        }
+    }
+}

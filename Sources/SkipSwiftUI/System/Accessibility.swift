@@ -533,9 +533,13 @@ extension View {
 }
 
 extension View {
-    @available(*, unavailable)
-    nonisolated public func accessibilityActions<Content>(@ViewBuilder _ content: () -> Content) -> some View where Content : View {
-        stubView()
+    nonisolated public func accessibilityActions<Content>(
+        @ViewBuilder _ content: () -> Content
+    ) -> some View where Content: View {
+        let content = content()
+        return ModifierView(target: self) {
+            $0.Java_viewOrEmpty.bridgedAccessibilityActions(content.Java_viewOrEmpty)
+        }
     }
 }
 

@@ -13,6 +13,7 @@ import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -77,6 +78,19 @@ final class FuseComposeUITests: XCTestCase {
             throw XCTSkip("host Swift runtime lacks swift_task_checkIsolated_hook; bridged main-actor calls would trap")
         }
     }
+
+    #if SKIP
+    private func exactSemanticsOwner(_ tag: String) -> SemanticsNode {
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithTag(tag).assertCountEquals(1)
+        composeRule.onAllNodesWithTag(tag, useUnmergedTree: true).assertCountEquals(1)
+        let owner = composeRule.onNodeWithTag(tag).fetchSemanticsNode()
+        let unmergedOwner = composeRule.onNodeWithTag(tag, useUnmergedTree: true)
+            .fetchSemanticsNode()
+        XCTAssertEqual(owner.id, unmergedOwner.id)
+        return owner
+    }
+    #endif
 
     /// Smoke test: a bridged native view renders into the Compose tree at all.
     func testNativeViewRenders() throws {
@@ -305,6 +319,52 @@ final class FuseComposeUITests: XCTestCase {
         composeRule.onNodeWithTag("accessibility-facade-owner").assertTextEquals("Archived")
         composeRule.onNodeWithTag("move-up-action-count").assertTextEquals("move up actions: 1")
         composeRule.onNodeWithTag("archive-action-count").assertTextEquals("archive actions: 1")
+        #endif
+    }
+
+    /// A direct named-action facade is the baseline; the builder facade must preserve the
+    /// same owner model while dynamically changing action membership, titles, and handlers.
+    func testAccessibilityActionsBuilderFacadePreservesDynamicActions() throws {
+        #if !SKIP
+        throw XCTSkip("Compose UI testing is Android-only")
+        #else
+        try requireBridgedMainActor()
+        composeRule.setContent {
+            Column {
+                AccessibilityFacadeTestFixture().Compose()
+                AccessibilityActionsBuilderFixture().Compose()
+            }
+        }
+
+        let baselineActions = exactSemanticsOwner("accessibility-facade-owner").config
+            .getOrNull(SemanticsActions.CustomActions)
+        XCTAssertEqual(baselineActions?.map { $0.label }, listOf("Move Up", "Archive"))
+
+        let tag = "accessibility-actions-builder-owner"
+        let initialActions = exactSemanticsOwner(tag).config
+            .getOrNull(SemanticsActions.CustomActions)
+        XCTAssertEqual(initialActions?.map { $0.label }, listOf("Move Up"))
+
+        composeRule.onNodeWithTag("accessibility-actions-builder-toggle").performClick()
+        let expandedActions = exactSemanticsOwner(tag).config
+            .getOrNull(SemanticsActions.CustomActions)
+        XCTAssertEqual(expandedActions?.map { $0.label }, listOf("Move Up", "Archive"))
+        XCTAssertEqual(expandedActions?.firstOrNull { $0.label == "Move Up" }?.action(), true)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("builder-move-action-count")
+            .assertTextEquals("builder move actions: 1")
+        composeRule.onNodeWithTag("builder-archive-action-count")
+            .assertTextEquals("builder archive actions: 0")
+
+        let renamedActions = exactSemanticsOwner(tag).config
+            .getOrNull(SemanticsActions.CustomActions)
+        XCTAssertEqual(renamedActions?.map { $0.label }, listOf("Move Down", "Archive"))
+        XCTAssertEqual(renamedActions?.firstOrNull { $0.label == "Archive" }?.action(), true)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("builder-move-action-count")
+            .assertTextEquals("builder move actions: 1")
+        composeRule.onNodeWithTag("builder-archive-action-count")
+            .assertTextEquals("builder archive actions: 1")
         #endif
     }
 
