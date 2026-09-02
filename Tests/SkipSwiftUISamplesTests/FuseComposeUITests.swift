@@ -90,6 +90,34 @@ final class FuseComposeUITests: XCTestCase {
         XCTAssertEqual(owner.id, unmergedOwner.id)
         return owner
     }
+
+    private func assertAccessibilityActionsBuilderTransitions() {
+        let tag = "accessibility-actions-builder-owner"
+        let initialActions = exactSemanticsOwner(tag).config
+            .getOrNull(SemanticsActions.CustomActions)
+        XCTAssertEqual(initialActions?.map { $0.label }, listOf("Move Up"))
+
+        composeRule.onNodeWithTag("accessibility-actions-builder-toggle").performClick()
+        let expandedActions = exactSemanticsOwner(tag).config
+            .getOrNull(SemanticsActions.CustomActions)
+        XCTAssertEqual(expandedActions?.map { $0.label }, listOf("Move Up", "Archive"))
+        XCTAssertEqual(expandedActions?.firstOrNull { $0.label == "Move Up" }?.action(), true)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("builder-move-action-count")
+            .assertTextEquals("builder move actions: 1")
+        composeRule.onNodeWithTag("builder-archive-action-count")
+            .assertTextEquals("builder archive actions: 0")
+
+        let renamedActions = exactSemanticsOwner(tag).config
+            .getOrNull(SemanticsActions.CustomActions)
+        XCTAssertEqual(renamedActions?.map { $0.label }, listOf("Move Down", "Archive"))
+        XCTAssertEqual(renamedActions?.firstOrNull { $0.label == "Archive" }?.action(), true)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("builder-move-action-count")
+            .assertTextEquals("builder move actions: 1")
+        composeRule.onNodeWithTag("builder-archive-action-count")
+            .assertTextEquals("builder archive actions: 1")
+    }
     #endif
 
     /// Smoke test: a bridged native view renders into the Compose tree at all.
@@ -322,7 +350,7 @@ final class FuseComposeUITests: XCTestCase {
         #endif
     }
 
-    /// A direct named-action facade is the baseline; the builder facade must preserve the
+    /// The direct SkipUI builder is the baseline; the Fuse builder facade must preserve the
     /// same owner model while dynamically changing action membership, titles, and handlers.
     func testAccessibilityActionsBuilderFacadePreservesDynamicActions() throws {
         #if !SKIP
@@ -331,40 +359,44 @@ final class FuseComposeUITests: XCTestCase {
         try requireBridgedMainActor()
         composeRule.setContent {
             Column {
-                AccessibilityFacadeTestFixture().Compose()
+                SkipUI.Text(
+                    keyPattern: "Direct builder owner",
+                    keyValues: nil,
+                    tableName: nil,
+                    localeIdentifier: nil,
+                    bridgedBundle: nil
+                )
+                .accessibilityActions {
+                    SkipUI.Button(action: {}, label: {
+                        SkipUI.Text(
+                            keyPattern: "Move Up",
+                            keyValues: nil,
+                            tableName: nil,
+                            localeIdentifier: nil,
+                            bridgedBundle: nil
+                        )
+                    })
+                    SkipUI.Button(action: {}, label: {
+                        SkipUI.Text(
+                            keyPattern: "Archive",
+                            keyValues: nil,
+                            tableName: nil,
+                            localeIdentifier: nil,
+                            bridgedBundle: nil
+                        )
+                    })
+                }
+                .accessibilityIdentifier("accessibility-actions-direct-owner")
+                .Compose()
+
                 AccessibilityActionsBuilderFixture().Compose()
             }
         }
 
-        let baselineActions = exactSemanticsOwner("accessibility-facade-owner").config
+        let baselineActions = exactSemanticsOwner("accessibility-actions-direct-owner").config
             .getOrNull(SemanticsActions.CustomActions)
         XCTAssertEqual(baselineActions?.map { $0.label }, listOf("Move Up", "Archive"))
-
-        let tag = "accessibility-actions-builder-owner"
-        let initialActions = exactSemanticsOwner(tag).config
-            .getOrNull(SemanticsActions.CustomActions)
-        XCTAssertEqual(initialActions?.map { $0.label }, listOf("Move Up"))
-
-        composeRule.onNodeWithTag("accessibility-actions-builder-toggle").performClick()
-        let expandedActions = exactSemanticsOwner(tag).config
-            .getOrNull(SemanticsActions.CustomActions)
-        XCTAssertEqual(expandedActions?.map { $0.label }, listOf("Move Up", "Archive"))
-        XCTAssertEqual(expandedActions?.firstOrNull { $0.label == "Move Up" }?.action(), true)
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("builder-move-action-count")
-            .assertTextEquals("builder move actions: 1")
-        composeRule.onNodeWithTag("builder-archive-action-count")
-            .assertTextEquals("builder archive actions: 0")
-
-        let renamedActions = exactSemanticsOwner(tag).config
-            .getOrNull(SemanticsActions.CustomActions)
-        XCTAssertEqual(renamedActions?.map { $0.label }, listOf("Move Down", "Archive"))
-        XCTAssertEqual(renamedActions?.firstOrNull { $0.label == "Archive" }?.action(), true)
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("builder-move-action-count")
-            .assertTextEquals("builder move actions: 1")
-        composeRule.onNodeWithTag("builder-archive-action-count")
-            .assertTextEquals("builder archive actions: 1")
+        assertAccessibilityActionsBuilderTransitions()
         #endif
     }
 
